@@ -6,25 +6,25 @@ This is an simple implementation of concurrent subscriber and publisher mechanis
 ```go
 // Create new instance of pubsub
 // Give subscriber count, how many data will be published, your task func, if debug needed give true
-func main(){
+func main() {
 	// Data for your job
-	data := [100]int{}  
-	for i := 0; i < len(data); i++ {  
-		data[i] = i  
+	data := [100]int{}
+	for i := 0; i < len(data); i++ {
+		data[i] = i
 	}
 
 	ps := pubsub.New(runtime.NumCPU(), len(data), myTask, false)
 	// Start subscribers to listen channel
 	ps.StartSubscribers()
 	// Publish your data
-	for i := 0; i < len(data); i++ {  
-		ps.Publish(data[i])  
+	for i := 0; i < len(data); i++ {
+		ps.Publish(data[i])
 	}
 	// If you need to wait your all tasks for done
 	ps.Wait()
 }
 
-func myTask(data interface{}, done func()){
+func myTask(data interface{}, done func()) {
 	defer done()
 	log.Println("My Task is running with data : ", data)
 }
