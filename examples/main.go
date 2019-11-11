@@ -9,7 +9,7 @@ import (
 
 func main() {
 
-	data := [100]int{}
+	data := [100000]int{}
 
 	for i := 0; i < len(data); i++ {
 		data[i] = i

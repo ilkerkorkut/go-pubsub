@@ -13,6 +13,7 @@ type PubSub struct {
 	PublishedDataCount     int
 	CurrentSubscribedCount int
 	Debug                  bool
+	Mutex                  sync.Mutex
 }
 
 func New(subscriberCount int, publishedDataCount int, taskFunc func(interface{}, func()), debug bool) *PubSub {
@@ -52,9 +53,12 @@ func (ps *PubSub) Subscriber(id int) {
 		}
 		ps.Task(d, ps.taskCallback)
 
+		ps.Mutex.Lock()
 		ps.CurrentSubscribedCount++
+		ps.Mutex.Unlock()
 		// If published data consuming is completely done, close channel
 		if ps.CurrentSubscribedCount == ps.PublishedDataCount {
+			log.Printf("Subscribed Tasks: %d - Published Tasks: %d", ps.CurrentSubscribedCount, ps.PublishedDataCount)
 			ps.CloseChannel()
 		}
 	}
