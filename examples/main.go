@@ -1,7 +1,7 @@
 package main
 
 import (
-	"go-pubsub"
+	"github.com/ilkerkorkut/go-pubsub"
 	"log"
 	"runtime"
 	"time"
