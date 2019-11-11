@@ -58,7 +58,9 @@ func (ps *PubSub) Subscriber(id int) {
 		ps.Mutex.Unlock()
 		// If published data consuming is completely done, close channel
 		if ps.CurrentSubscribedCount == ps.PublishedDataCount {
-			log.Printf("Subscribed Tasks: %d - Published Tasks: %d", ps.CurrentSubscribedCount, ps.PublishedDataCount)
+			if ps.Debug {
+				log.Printf("Subscribed Tasks: %d - Published Tasks: %d", ps.CurrentSubscribedCount, ps.PublishedDataCount)
+			}
 			ps.CloseChannel()
 		}
 	}
