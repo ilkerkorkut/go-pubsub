@@ -9,19 +9,31 @@ import (
 
 func main() {
 
-	data := [100000]int{}
+	data := [100]pubsub.DataPacket{}
 
 	for i := 0; i < len(data); i++ {
-		data[i] = i
+		data[i] = pubsub.DataPacket{
+			Data: i,
+			Time: time.Now(),
+		}
 	}
 
 	go func() {
-		ps := pubsub.New(runtime.NumCPU(), len(data), myTask, false)
-		ps.StartSubscribers()
+		ps, err := pubsub.New(runtime.NumCPU(), len(data), myTask, &pubsub.Config{
+			MultiNode: false,
+			Name:      "my-pubsub-application",
+			Debug:     true,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		for i := 0; i < len(data); i++ {
 			ps.Publish(data[i])
 		}
+
 		ps.Wait()
+		log.Println("Successfully completed!")
 	}()
 
 	c := make(chan string)
