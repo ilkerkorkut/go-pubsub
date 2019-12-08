@@ -46,7 +46,7 @@ Go to the `./examples/pubsub_multinode` folder.
 Run this commands for three nodes (or separately):
 
 ```
-go run main.go 8080 8081 8082 & go run main.go 8081 8080 8082 & go run main.go 8081 8080 8082
+go run main.go 8080 8081 8082 & go run main.go 8081 8080 8082 & go run main.go 8082 8080 8081
 ```
 
 ```go
