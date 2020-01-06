@@ -15,7 +15,9 @@ func (ps *PubSub) server(port string) {
 	}
 	defer l.Close()
 
-	log.Println("Started TCP server!")
+	if ps.Config.Debug {
+		log.Printf("Started TCP server on PORT : %s", port)
+	}
 
 	for {
 		c, err := l.Accept()
@@ -44,7 +46,7 @@ func (ps *PubSub) handleConnection(c net.Conn) {
 }
 
 func (ps *PubSub) replyMessage(c net.Conn) {
-	t := time.Now()
-	myTime := t.Format(time.RFC3339) + "\n"
-	c.Write([]byte(myTime))
+	ps.TcpSignal.Latest = time.Now()
+	t := ps.TcpSignal.Latest.Format(time.RFC3339) + "\n"
+	c.Write([]byte(t))
 }

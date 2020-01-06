@@ -17,16 +17,18 @@ type PubSub struct {
 	CurrentPublishedDataCount  int
 	LatestPortIndex            int
 	RemoteCall                 bool
+	TcpSignal                  tcpSignal
 	Mutex                      sync.Mutex
 	Config                     Config
 }
 
 type Config struct {
-	MultiNode  bool
-	ServerPort string
-	Name       string
-	NodePorts  []string
-	Debug      bool
+	MultiNode           bool
+	ServerPort          string
+	Name                string
+	NodePorts           []string
+	ChannelCloseTimeout int64
+	Debug               bool
 }
 
 type PsError struct {
@@ -55,13 +57,24 @@ func New(subscriberCount int, totalDataSize int, taskFunc func(interface{}, func
 		Task:            taskFunc,
 		Config:          *config,
 	}
-	if config.MultiNode && config.ServerPort != "" {
-		ps.RemoteCall = true
-		go ps.server(config.ServerPort)
-	} else if config.MultiNode && config.ServerPort == "" {
-		return nil, &PsError{
-			Code:    0,
-			Message: "Please set server port.",
+	if config.MultiNode {
+		ps.TcpSignal = tcpSignal{
+			Type:   0,
+			Latest: time.Now(),
+		}
+		if config.ServerPort != "" {
+			ps.RemoteCall = true
+			go ps.server(config.ServerPort)
+			go ps.timeOutTicker()
+		} else if config.ServerPort == "" {
+			ps.RemoteCall = true
+			const defaultPort = "8989"
+			config.ServerPort = defaultPort
+			go ps.server(config.ServerPort)
+			go ps.timeOutTicker()
+		}
+		if config.ChannelCloseTimeout == 0 {
+			config.ChannelCloseTimeout = 120000
 		}
 	}
 	ps.StartSubscribers()
@@ -77,12 +90,12 @@ func (ps *PubSub) Publish(data interface{}) {
 	ps.Mutex.Unlock()
 
 	if ps.Config.MultiNode {
-		if ps.RemoteCall {
+		if ps.RemoteCall && ps.isMultiNodePublisher() {
 			port := ps.getPort()
 			go ps.publishOtherNode(data, port)
 		} else {
 			if ps.Config.Debug {
-				log.Printf("Publishing local thread... %d , %d", data, ps.CurrentPublishedDataCount)
+				log.Printf("Publishing locally: %d , %d", data, ps.CurrentPublishedDataCount)
 			}
 			ps.RemoteCall = !ps.RemoteCall
 			ps.Channel <- data
@@ -97,7 +110,7 @@ func (ps *PubSub) StartSubscribers() {
 		ps.WaitGroup.Add(1)
 		go ps.Subscriber(i)
 		if ps.Config.Debug {
-			log.Printf("Added subscriber with id: %d ", i)
+			log.Printf("Added subscriber with SUB_ID: %d", i)
 		}
 	}
 }
@@ -106,7 +119,7 @@ func (ps *PubSub) Subscriber(id int) {
 	defer ps.WaitGroup.Done()
 	for d := range ps.Channel {
 		if ps.Config.Debug {
-			log.Printf("ID : %d - Task Consuming", id)
+			log.Printf("SUB_ID : %d - Consuming...", id)
 		}
 		ps.Task(d, ps.taskCallback)
 
@@ -116,9 +129,11 @@ func (ps *PubSub) Subscriber(id int) {
 		// If published data consuming is completely done, close channel
 		if ps.CurrentSubscribedDataCount == ps.TotalDataSize && !ps.Config.MultiNode {
 			if ps.Config.Debug {
-				log.Printf("Subscribed Data Count: %d - Published Tasks: %d", ps.CurrentSubscribedDataCount, ps.TotalDataSize)
+				log.Printf("SUB_ID : %d - Subscribed Data Count: %d - Published Tasks: %d", id, ps.CurrentSubscribedDataCount, ps.TotalDataSize)
 			}
 			ps.closeChannel()
+		} else if ps.Config.MultiNode {
+
 		}
 	}
 }
@@ -129,7 +144,9 @@ func (ps *PubSub) Wait() {
 
 func (ps *PubSub) closeChannel() {
 	close(ps.Channel)
-	log.Println("Channel Closed")
+	if ps.Config.Debug {
+		log.Println("Channel Closed")
+	}
 }
 
 func (ps *PubSub) taskCallback() {
@@ -139,17 +156,38 @@ func (ps *PubSub) taskCallback() {
 }
 
 func (ps *PubSub) getPort() string {
+	ps.Mutex.Lock()
 	if ps.LatestPortIndex < len(ps.Config.NodePorts) {
-		ps.Mutex.Lock()
 		port := ps.Config.NodePorts[ps.LatestPortIndex]
 		ps.LatestPortIndex++
-		ps.Mutex.Unlock()
+		defer ps.Mutex.Unlock()
 		return port
 	} else {
-		ps.Mutex.Lock()
 		ps.LatestPortIndex = 1
 		ps.RemoteCall = !ps.RemoteCall
-		ps.Mutex.Unlock()
+		defer ps.Mutex.Unlock()
 		return ps.Config.NodePorts[0]
+	}
+}
+
+func (ps *PubSub) isMultiNodePublisher() bool {
+	if ps.Config.NodePorts == nil || len(ps.Config.NodePorts) == 0 {
+		return false
+	} else {
+		return true
+	}
+}
+
+type tcpSignal struct {
+	Type   int `json:"type"`
+	Latest time.Time
+}
+
+func (ps *PubSub) timeOutTicker() {
+	ticker := time.NewTicker(5 * time.Millisecond)
+	for _ = range ticker.C {
+		if time.Now().Sub(ps.TcpSignal.Latest).Milliseconds() >= ps.Config.ChannelCloseTimeout {
+			ps.closeChannel()
+		}
 	}
 }
